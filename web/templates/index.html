@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">舆情监测仪表盘</h1>
+    <p class="page-subtitle">实时监控品牌声量，洞察舆论趋势</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value" id="total-articles">--</div>
+        <div class="stat-label">今日采集文章</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="positive-count" style="color: var(--success);">--</div>
+        <div class="stat-label">积极内容</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="negative-count" style="color: var(--danger);">--</div>
+        <div class="stat-label">消极内容</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="platforms-count">--</div>
+        <div class="stat-label">监测平台</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-title">📊 配置状态</div>
+    <div id="config-status">
+        <div class="spinner"></div>
+        <span style="margin-left: 12px; color: var(--text-secondary);">加载中...</span>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-title">📱 平台登录状态</div>
+    <div id="platforms-status">
+        <div class="spinner"></div>
+        <span style="margin-left: 12px; color: var(--text-secondary);">加载中...</span>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-title">📋 最近采集结果</div>
+    <div id="latest-crawl">
+        <p style="color: var(--text-secondary);">暂无采集记录，请前往<a href="/tasks" style="color: var(--accent);">采集任务</a>页面启动采集。</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadConfigStatus() {
+    try {
+        const response = await fetch('/api/config/validate');
+        const data = await response.json();
+        
+        const container = document.getElementById('config-status');
+        container.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="badge ${data.feishu ? 'badge-success' : 'badge-danger'}">
+                        ${data.feishu ? '✓' : '✗'} 飞书
+                    </span>
+                    <span style="color: var(--text-secondary); font-size: 13px;">
+                        ${data.details.feishu}
+                    </span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="badge ${data.llm ? 'badge-success' : 'badge-danger'}">
+                        ${data.llm ? '✓' : '✗'} LLM
+                    </span>
+                    <span style="color: var(--text-secondary); font-size: 13px;">
+                        ${data.details.llm}
+                    </span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="badge ${data.keywords ? 'badge-success' : 'badge-danger'}">
+                        ${data.keywords ? '✓' : '✗'} 关键词
+                    </span>
+                    <span style="color: var(--text-secondary); font-size: 13px;">
+                        ${data.details.keywords}
+                    </span>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('platforms-count').textContent = '2';
+        
+    } catch (error) {
+        console.error('加载配置状态失败:', error);
+    }
+}
+
+async function loadPlatformsStatus() {
+    try {
+        const response = await fetch('/api/auth/platforms');
+        const data = await response.json();
+        
+        const container = document.getElementById('platforms-status');
+        const platformNames = {
+            'xhs': '小红书',
+            'wechat_mp': '微信公众号'
+        };
+        
+        container.innerHTML = data.map(p => `
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                <span class="badge ${p.logged_in ? 'badge-success' : 'badge-warning'}">
+                    ${p.logged_in ? '已登录' : '未登录'}
+                </span>
+                <span>${platformNames[p.platform] || p.platform}</span>
+                ${p.last_login ? `
+                    <span style="color: var(--text-secondary); font-size: 12px;">
+                        上次登录: ${new Date(p.last_login).toLocaleString()}
+                    </span>
+                ` : ''}
+            </div>
+        `).join('');
+        
+    } catch (error) {
+        console.error('加载平台状态失败:', error);
+    }
+}
+
+async function loadLatestCrawl() {
+    try {
+        const response = await fetch('/api/crawl/latest');
+        const data = await response.json();
+        
+        const container = document.getElementById('latest-crawl');
+        
+        if (!data || data.total === 0) {
+            container.innerHTML = `<p style="color: var(--text-secondary);">暂无采集记录，请前往<a href="/tasks" style="color: var(--accent);">采集任务</a>页面启动采集。</p>`;
+            return;
+        }
+        
+        // 更新统计数据
+        document.getElementById('total-articles').textContent = data.total;
+        document.getElementById('positive-count').textContent = data.sentiment_stats?.['积极'] || 0;
+        document.getElementById('negative-count').textContent = data.sentiment_stats?.['消极'] || 0;
+        
+        // 显示最近采集摘要
+        const timeStr = data.crawled_at ? new Date(data.crawled_at).toLocaleString('zh-CN') : '未知';
+        container.innerHTML = `
+            <div style="margin-bottom: 16px;">
+                <span style="color: var(--text-secondary);">采集时间：${timeStr}</span>
+                <span style="margin-left: 16px; color: var(--text-secondary);">共 ${data.total} 篇文章</span>
+            </div>
+            ${data.articles && data.articles.length > 0 ? `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>标题</th>
+                            <th>来源</th>
+                            <th>情感</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.articles.slice(0, 5).map(a => `
+                            <tr>
+                                <td><a href="${a.url}" target="_blank" style="color: var(--accent);">${(a.title || '').substring(0, 40)}${a.title && a.title.length > 40 ? '...' : ''}</a></td>
+                                <td>${a.author || a.platform || '-'}</td>
+                                <td><span class="badge ${a.sentiment === '积极' ? 'badge-success' : a.sentiment === '消极' ? 'badge-danger' : 'badge-warning'}">${a.sentiment || '未分析'}</span></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <div style="margin-top: 12px;">
+                    <a href="/tasks" style="color: var(--accent);">查看全部 →</a>
+                </div>
+            ` : ''}
+        `;
+        
+    } catch (error) {
+        console.error('加载最近采集结果失败:', error);
+    }
+}
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadConfigStatus();
+    loadPlatformsStatus();
+    loadLatestCrawl();
+});
+</script>
+{% endblock %}
+
+

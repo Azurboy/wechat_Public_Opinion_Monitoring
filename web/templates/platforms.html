@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">平台管理</h1>
+    <p class="page-subtitle">管理采集平台的登录状态和配置</p>
+</div>
+
+<div id="alert-container"></div>
+
+<!-- 小红书 -->
+<div class="card">
+    <div class="card-title">📕 小红书</div>
+    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+        <span id="xhs-status" class="badge badge-warning">检查中...</span>
+        <span id="xhs-last-login" style="color: var(--text-secondary); font-size: 13px;"></span>
+    </div>
+    <div style="display: flex; gap: 12px;">
+        <button class="btn btn-primary" onclick="startXHSLogin()" id="xhs-login-btn">
+            📱 扫码登录
+        </button>
+        <button class="btn btn-danger" onclick="xhsLogout()" id="xhs-logout-btn" style="display: none;">
+            退出登录
+        </button>
+    </div>
+    <div id="xhs-qrcode" style="margin-top: 16px; display: none;">
+        <p style="color: var(--text-secondary); margin-bottom: 8px;">请使用小红书APP扫描下方二维码：</p>
+        <div style="background: white; padding: 16px; display: inline-block; border-radius: 8px;">
+            <img id="xhs-qrcode-img" src="" alt="二维码" style="width: 200px; height: 200px;">
+        </div>
+    </div>
+</div>
+
+<!-- 微信公众号平台 -->
+<div class="card">
+    <div class="card-title">💬 微信公众号（高级）</div>
+    <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
+        登录微信公众号平台可获取实时文章，支持按时间排序。
+    </p>
+    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+        <span id="wechat-status" class="badge badge-warning">检查中...</span>
+        <span id="wechat-last-login" style="color: var(--text-secondary); font-size: 13px;"></span>
+    </div>
+    <div style="display: flex; gap: 12px;">
+        <button class="btn btn-primary" onclick="startWechatLogin()" id="wechat-login-btn">
+            📱 扫码登录
+        </button>
+        <button class="btn btn-danger" onclick="wechatLogout()" id="wechat-logout-btn" style="display: none;">
+            退出登录
+        </button>
+    </div>
+</div>
+
+<!-- 平台配置 -->
+<div class="card">
+    <div class="card-title">⚙️ 平台配置</div>
+    <form id="platforms-form">
+        <div class="form-group">
+            <label class="form-label">微信公众号获取方式</label>
+            <select class="form-input" id="wechat_method">
+                <option value="sogou">搜狗微信搜索（免费，有延迟）</option>
+                <option value="mp">公众号平台（需登录，实时）</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">
+                <input type="checkbox" id="xhs_enabled" checked style="margin-right: 8px;">
+                启用小红书采集
+            </label>
+        </div>
+        <div class="form-group">
+            <label class="form-label">小红书排序方式</label>
+            <select class="form-input" id="xhs_sort">
+                <option value="time_descending">最新排序</option>
+                <option value="general">综合排序</option>
+                <option value="popularity_descending">最热排序</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">时间过滤（小时）</label>
+            <input type="number" class="form-input" id="filter_hours" value="48" min="0">
+            <small style="color: var(--text-secondary);">0表示不限制，48表示只获取48小时内的内容</small>
+        </div>
+        <button type="submit" class="btn btn-primary">保存配置</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let xhsSessionId = null;
+let wechatSessionId = null;
+let pollInterval = null;
+
+function showAlert(message, type = 'success') {
+    const container = document.getElementById('alert-container');
+    container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+    setTimeout(() => container.innerHTML = '', 3000);
+}
+
+// 检查平台状态
+async function checkPlatformsStatus() {
+    try {
+        // 小红书
+        const xhsResp = await fetch('/api/auth/xhs/check');
+        const xhsData = await xhsResp.json();
+        
+        const xhsStatus = document.getElementById('xhs-status');
+        const xhsLoginBtn = document.getElementById('xhs-login-btn');
+        const xhsLogoutBtn = document.getElementById('xhs-logout-btn');
+        const xhsLastLogin = document.getElementById('xhs-last-login');
+        
+        if (xhsData.logged_in) {
+            xhsStatus.textContent = '已登录';
+            xhsStatus.className = 'badge badge-success';
+            xhsLoginBtn.style.display = 'none';
+            xhsLogoutBtn.style.display = 'inline-flex';
+            if (xhsData.last_login) {
+                xhsLastLogin.textContent = '上次登录: ' + new Date(xhsData.last_login).toLocaleString();
+            }
+        } else {
+            xhsStatus.textContent = '未登录';
+            xhsStatus.className = 'badge badge-warning';
+            xhsLoginBtn.style.display = 'inline-flex';
+            xhsLogoutBtn.style.display = 'none';
+        }
+        
+        // 微信
+        const wechatResp = await fetch('/api/auth/wechat/check');
+        const wechatData = await wechatResp.json();
+        
+        const wechatStatus = document.getElementById('wechat-status');
+        const wechatLoginBtn = document.getElementById('wechat-login-btn');
+        const wechatLogoutBtn = document.getElementById('wechat-logout-btn');
+        const wechatLastLogin = document.getElementById('wechat-last-login');
+        
+        if (wechatData.logged_in) {
+            wechatStatus.textContent = '已登录';
+            wechatStatus.className = 'badge badge-success';
+            wechatLoginBtn.style.display = 'none';
+            wechatLogoutBtn.style.display = 'inline-flex';
+            if (wechatData.last_login) {
+                wechatLastLogin.textContent = '上次登录: ' + new Date(wechatData.last_login).toLocaleString();
+            }
+        } else {
+            wechatStatus.textContent = '未登录';
+            wechatStatus.className = 'badge badge-warning';
+            wechatLoginBtn.style.display = 'inline-flex';
+            wechatLogoutBtn.style.display = 'none';
+        }
+        
+    } catch (error) {
+        console.error('检查平台状态失败:', error);
+    }
+}
+
+// 小红书登录
+async function startXHSLogin() {
+    try {
+        const response = await fetch('/api/auth/xhs/login', {method: 'POST'});
+        const data = await response.json();
+        xhsSessionId = data.session_id;
+        
+        document.getElementById('xhs-status').textContent = '等待扫码...';
+        document.getElementById('xhs-status').className = 'badge badge-warning';
+        document.getElementById('xhs-login-btn').disabled = true;
+        
+        // 显示二维码区域
+        document.getElementById('xhs-qrcode').style.display = 'block';
+        
+        // 轮询状态
+        pollInterval = setInterval(async () => {
+            const statusResp = await fetch(`/api/auth/xhs/status/${xhsSessionId}`);
+            const statusData = await statusResp.json();
+            
+            if (statusData.qrcode_url) {
+                document.getElementById('xhs-qrcode-img').src = statusData.qrcode_url;
+            }
+            
+            if (statusData.status === 'success') {
+                clearInterval(pollInterval);
+                showAlert('小红书登录成功！', 'success');
+                document.getElementById('xhs-qrcode').style.display = 'none';
+                checkPlatformsStatus();
+            } else if (statusData.status === 'failed') {
+                clearInterval(pollInterval);
+                showAlert('登录失败: ' + statusData.message, 'error');
+                document.getElementById('xhs-qrcode').style.display = 'none';
+                document.getElementById('xhs-login-btn').disabled = false;
+            }
+        }, 2000);
+        
+    } catch (error) {
+        showAlert('启动登录失败: ' + error.message, 'error');
+        document.getElementById('xhs-login-btn').disabled = false;
+    }
+}
+
+async function xhsLogout() {
+    if (!confirm('确定要退出小红书登录吗？')) return;
+    
+    try {
+        await fetch('/api/auth/xhs/logout', {method: 'DELETE'});
+        showAlert('已退出登录', 'success');
+        checkPlatformsStatus();
+    } catch (error) {
+        showAlert('退出失败: ' + error.message, 'error');
+    }
+}
+
+// 微信登录
+async function startWechatLogin() {
+    try {
+        const response = await fetch('/api/auth/wechat/login', {method: 'POST'});
+        const data = await response.json();
+        wechatSessionId = data.session_id;
+        
+        document.getElementById('wechat-status').textContent = '等待扫码...';
+        document.getElementById('wechat-status').className = 'badge badge-warning';
+        document.getElementById('wechat-login-btn').disabled = true;
+        
+        showAlert('请在弹出的浏览器窗口中扫码登录', 'success');
+        
+        // 轮询状态
+        pollInterval = setInterval(async () => {
+            const statusResp = await fetch(`/api/auth/wechat/status/${wechatSessionId}`);
+            const statusData = await statusResp.json();
+            
+            if (statusData.status === 'success') {
+                clearInterval(pollInterval);
+                showAlert('微信公众号平台登录成功！', 'success');
+                checkPlatformsStatus();
+            } else if (statusData.status === 'failed') {
+                clearInterval(pollInterval);
+                showAlert('登录失败: ' + statusData.message, 'error');
+                document.getElementById('wechat-login-btn').disabled = false;
+            }
+        }, 2000);
+        
+    } catch (error) {
+        showAlert('启动登录失败: ' + error.message, 'error');
+        document.getElementById('wechat-login-btn').disabled = false;
+    }
+}
+
+async function wechatLogout() {
+    if (!confirm('确定要退出微信公众号平台登录吗？')) return;
+    
+    try {
+        await fetch('/api/auth/wechat/logout', {method: 'DELETE'});
+        showAlert('已退出登录', 'success');
+        checkPlatformsStatus();
+    } catch (error) {
+        showAlert('退出失败: ' + error.message, 'error');
+    }
+}
+
+// 加载平台配置
+async function loadPlatformsConfig() {
+    try {
+        const response = await fetch('/api/config/platforms');
+        const data = await response.json();
+        
+        document.getElementById('wechat_method').value = data.wechat_method || 'sogou';
+        document.getElementById('xhs_enabled').checked = data.xhs_enabled !== false;
+        document.getElementById('xhs_sort').value = data.xhs_sort || 'time_descending';
+        document.getElementById('filter_hours').value = data.filter_hours || 48;
+    } catch (error) {
+        console.error('加载配置失败:', error);
+    }
+}
+
+// 保存平台配置
+document.getElementById('platforms-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const data = {
+        wechat_method: document.getElementById('wechat_method').value,
+        xhs_enabled: document.getElementById('xhs_enabled').checked,
+        xhs_sort: document.getElementById('xhs_sort').value,
+        filter_hours: parseInt(document.getElementById('filter_hours').value) || 48,
+    };
+    
+    try {
+        const response = await fetch('/api/config/platforms', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            showAlert('配置保存成功！', 'success');
+        } else {
+            showAlert('保存失败', 'error');
+        }
+    } catch (error) {
+        showAlert('保存失败: ' + error.message, 'error');
+    }
+});
+
+// 页面加载
+document.addEventListener('DOMContentLoaded', function() {
+    checkPlatformsStatus();
+    loadPlatformsConfig();
+});
+</script>
+{% endblock %}
+
+
+

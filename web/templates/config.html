@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">系统配置</h1>
+    <p class="page-subtitle">配置飞书、LLM等服务连接</p>
+</div>
+
+<div id="alert-container"></div>
+
+<!-- 飞书配置 -->
+<div class="card">
+    <div class="card-title">🐦 飞书配置</div>
+    <form id="feishu-form">
+        <div class="form-group">
+            <label class="form-label">App ID</label>
+            <input type="text" class="form-input" id="app_id" placeholder="cli_xxxxxx">
+        </div>
+        <div class="form-group">
+            <label class="form-label">App Secret</label>
+            <input type="password" class="form-input" id="app_secret" placeholder="xxxxxx">
+        </div>
+        <div class="form-group">
+            <label class="form-label">多维表格 App Token</label>
+            <input type="text" class="form-input" id="bitable_app_token" placeholder="从表格URL获取">
+        </div>
+        <div class="form-group">
+            <label class="form-label">数据表 Table ID</label>
+            <input type="text" class="form-input" id="bitable_table_id" placeholder="从表格URL获取">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Webhook URL (机器人)</label>
+            <input type="text" class="form-input" id="webhook_url" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxx">
+        </div>
+        <button type="submit" class="btn btn-primary">保存飞书配置</button>
+    </form>
+</div>
+
+<!-- LLM配置 -->
+<div class="card">
+    <div class="card-title">🤖 LLM配置</div>
+    <form id="llm-form">
+        <div class="form-group">
+            <label class="form-label">服务提供商</label>
+            <select class="form-input" id="llm_provider">
+                <option value="siliconflow">硅基流动 (SiliconFlow)</option>
+                <option value="openai">OpenAI</option>
+                <option value="deepseek">DeepSeek</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">模型</label>
+            <input type="text" class="form-input" id="llm_model" value="deepseek-ai/DeepSeek-V3">
+        </div>
+        <div class="form-group">
+            <label class="form-label">API Key</label>
+            <input type="password" class="form-input" id="llm_api_key" placeholder="sk-xxxxxx">
+        </div>
+        <div class="form-group">
+            <label class="form-label">API Base URL</label>
+            <input type="text" class="form-input" id="llm_base_url" value="https://api.siliconflow.cn/v1">
+        </div>
+        <button type="submit" class="btn btn-primary">保存LLM配置</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showAlert(message, type = 'success') {
+    const container = document.getElementById('alert-container');
+    container.innerHTML = `
+        <div class="alert alert-${type}">
+            ${message}
+        </div>
+    `;
+    setTimeout(() => container.innerHTML = '', 3000);
+}
+
+// 加载飞书配置
+async function loadFeishuConfig() {
+    try {
+        const response = await fetch('/api/config/feishu');
+        const data = await response.json();
+        
+        document.getElementById('app_id').value = data.app_id || '';
+        document.getElementById('app_secret').value = data.app_secret || '';
+        document.getElementById('bitable_app_token').value = data.bitable_app_token || '';
+        document.getElementById('bitable_table_id').value = data.bitable_table_id || '';
+        document.getElementById('webhook_url').value = data.webhook_url || '';
+    } catch (error) {
+        console.error('加载飞书配置失败:', error);
+    }
+}
+
+// 保存飞书配置
+document.getElementById('feishu-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const data = {
+        app_id: document.getElementById('app_id').value,
+        app_secret: document.getElementById('app_secret').value,
+        bitable_app_token: document.getElementById('bitable_app_token').value,
+        bitable_table_id: document.getElementById('bitable_table_id').value,
+        webhook_url: document.getElementById('webhook_url').value,
+    };
+    
+    try {
+        const response = await fetch('/api/config/feishu', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            showAlert('飞书配置保存成功！', 'success');
+        } else {
+            showAlert('保存失败，请重试', 'error');
+        }
+    } catch (error) {
+        showAlert('保存失败: ' + error.message, 'error');
+    }
+});
+
+// 加载LLM配置
+async function loadLLMConfig() {
+    try {
+        const response = await fetch('/api/config/llm');
+        const data = await response.json();
+        
+        document.getElementById('llm_provider').value = data.provider || 'siliconflow';
+        document.getElementById('llm_model').value = data.model || '';
+        document.getElementById('llm_api_key').value = data.api_key || '';
+        document.getElementById('llm_base_url').value = data.base_url || '';
+    } catch (error) {
+        console.error('加载LLM配置失败:', error);
+    }
+}
+
+// 保存LLM配置
+document.getElementById('llm-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const data = {
+        provider: document.getElementById('llm_provider').value,
+        model: document.getElementById('llm_model').value,
+        api_key: document.getElementById('llm_api_key').value,
+        base_url: document.getElementById('llm_base_url').value,
+    };
+    
+    try {
+        const response = await fetch('/api/config/llm', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            showAlert('LLM配置保存成功！', 'success');
+        } else {
+            showAlert('保存失败，请重试', 'error');
+        }
+    } catch (error) {
+        showAlert('保存失败: ' + error.message, 'error');
+    }
+});
+
+// 页面加载
+document.addEventListener('DOMContentLoaded', function() {
+    loadFeishuConfig();
+    loadLLMConfig();
+});
+</script>
+{% endblock %}
+
+
+

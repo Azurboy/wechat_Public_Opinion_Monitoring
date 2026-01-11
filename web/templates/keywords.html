@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">关键词管理</h1>
+    <p class="page-subtitle">配置监测关键词和过滤规则</p>
+</div>
+
+<div id="alert-container"></div>
+
+<!-- 添加关键词 -->
+<div class="card">
+    <div class="card-title">➕ 添加关键词</div>
+    <form id="add-keyword-form" style="display: flex; gap: 12px;">
+        <input type="text" class="form-input" id="new-keyword" placeholder="输入关键词" style="flex: 1;">
+        <button type="submit" class="btn btn-primary">添加</button>
+    </form>
+</div>
+
+<!-- 关键词列表 -->
+<div class="card">
+    <div class="card-title">🔑 当前关键词</div>
+    <div id="keywords-list">
+        <div class="spinner"></div>
+    </div>
+</div>
+
+<!-- 过滤规则 -->
+<div class="card">
+    <div class="card-title">🔍 过滤规则</div>
+    <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
+        设置关键词过滤规则，例如"Monolith"必须同时包含"砺思资本"、"投资"等词才保留。
+    </p>
+    <div id="filter-rules">
+        <div class="spinner"></div>
+    </div>
+</div>
+
+<!-- 采集设置 -->
+<div class="card">
+    <div class="card-title">⚙️ 采集设置</div>
+    <form id="search-config-form">
+        <div class="form-group">
+            <label class="form-label">每个关键词搜索页数</label>
+            <input type="number" class="form-input" id="max_pages" value="3" min="1" max="10">
+        </div>
+        <div class="form-group">
+            <label class="form-label">请求间隔（秒）</label>
+            <input type="number" class="form-input" id="request_delay" value="3" min="1" max="10">
+        </div>
+        <button type="submit" class="btn btn-primary">保存设置</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let keywordsData = { keywords: [], relevance_keywords: {} };
+
+function showAlert(message, type = 'success') {
+    const container = document.getElementById('alert-container');
+    container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+    setTimeout(() => container.innerHTML = '', 3000);
+}
+
+// 加载关键词配置
+async function loadKeywordsConfig() {
+    try {
+        const response = await fetch('/api/config/keywords');
+        keywordsData = await response.json();
+        
+        renderKeywords();
+        renderFilterRules();
+        
+        document.getElementById('max_pages').value = keywordsData.max_pages || 3;
+        document.getElementById('request_delay').value = keywordsData.request_delay || 3;
+        
+    } catch (error) {
+        console.error('加载关键词失败:', error);
+    }
+}
+
+// 渲染关键词列表
+function renderKeywords() {
+    const container = document.getElementById('keywords-list');
+    
+    if (!keywordsData.keywords || keywordsData.keywords.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary);">暂无关键词，请添加</p>';
+        return;
+    }
+    
+    container.innerHTML = keywordsData.keywords.map(kw => `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 8px;">
+            <span>${kw}</span>
+            <button class="btn btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="deleteKeyword('${kw}')">
+                删除
+            </button>
+        </div>
+    `).join('');
+}
+
+// 渲染过滤规则
+function renderFilterRules() {
+    const container = document.getElementById('filter-rules');
+    const rules = keywordsData.relevance_keywords || {};
+    
+    if (Object.keys(rules).length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary);">暂无过滤规则</p>';
+        return;
+    }
+    
+    container.innerHTML = Object.entries(rules).map(([keyword, words]) => `
+        <div style="margin-bottom: 16px; padding: 16px; background: var(--bg-secondary); border-radius: 8px;">
+            <div style="font-weight: 600; margin-bottom: 8px;">${keyword}</div>
+            <div style="color: var(--text-secondary); font-size: 13px;">
+                必须包含: ${words.join('、')}
+            </div>
+        </div>
+    `).join('');
+}
+
+// 添加关键词
+document.getElementById('add-keyword-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const keyword = document.getElementById('new-keyword').value.trim();
+    if (!keyword) return;
+    
+    try {
+        const response = await fetch(`/api/config/keywords/add?keyword=${encodeURIComponent(keyword)}`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            showAlert(`关键词 "${keyword}" 已添加`, 'success');
+            document.getElementById('new-keyword').value = '';
+            loadKeywordsConfig();
+        } else {
+            showAlert(data.message, 'error');
+        }
+    } catch (error) {
+        showAlert('添加失败: ' + error.message, 'error');
+    }
+});
+
+// 删除关键词
+async function deleteKeyword(keyword) {
+    if (!confirm(`确定要删除关键词 "${keyword}" 吗？`)) return;
+    
+    try {
+        const response = await fetch(`/api/config/keywords/${encodeURIComponent(keyword)}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            showAlert(`关键词 "${keyword}" 已删除`, 'success');
+            loadKeywordsConfig();
+        } else {
+            showAlert('删除失败', 'error');
+        }
+    } catch (error) {
+        showAlert('删除失败: ' + error.message, 'error');
+    }
+}
+
+// 保存采集设置
+document.getElementById('search-config-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    keywordsData.max_pages = parseInt(document.getElementById('max_pages').value) || 3;
+    keywordsData.request_delay = parseInt(document.getElementById('request_delay').value) || 3;
+    
+    try {
+        const response = await fetch('/api/config/keywords', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(keywordsData)
+        });
+        
+        if (response.ok) {
+            showAlert('设置已保存', 'success');
+        } else {
+            showAlert('保存失败', 'error');
+        }
+    } catch (error) {
+        showAlert('保存失败: ' + error.message, 'error');
+    }
+});
+
+// 页面加载
+document.addEventListener('DOMContentLoaded', loadKeywordsConfig);
+</script>
+{% endblock %}
+
+
+

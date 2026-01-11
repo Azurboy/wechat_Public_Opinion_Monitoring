@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">采集与日报</h1>
+    <p class="page-subtitle">启动采集任务、查看结果、生成舆情简报</p>
+</div>
+
+<div id="alert-container"></div>
+
+<!-- 启动任务 -->
+<div class="card">
+    <div class="card-title">🚀 启动新任务</div>
+    <form id="start-task-form">
+        <div class="form-group">
+            <label class="form-label">选择平台</label>
+            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" name="platforms" value="wechat" checked>
+                    微信公众号
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" name="platforms" value="xhs">
+                    小红书
+                </label>
+            </div>
+        </div>
+        <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="filter_enabled" checked>
+                启用关键词过滤
+            </label>
+        </div>
+        <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="analyze_sentiment" checked>
+                进行情感分析
+            </label>
+        </div>
+        <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="save_to_feishu" checked>
+                保存到飞书
+            </label>
+        </div>
+        <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="generate_briefing">
+                生成AI简报并推送
+            </label>
+        </div>
+        <button type="submit" class="btn btn-primary" id="start-btn">
+            🚀 启动采集
+        </button>
+    </form>
+</div>
+
+<!-- 当前任务 -->
+<div class="card" id="current-task-card" style="display: none;">
+    <div class="card-title">📋 当前任务</div>
+    <div id="current-task">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <span id="task-status" class="badge badge-warning">进行中</span>
+            <span id="task-message" style="color: var(--text-secondary);"></span>
+        </div>
+        <div class="progress" style="margin-bottom: 8px;">
+            <div class="progress-bar" id="task-progress" style="width: 0%;"></div>
+        </div>
+        <span id="task-progress-text" style="color: var(--text-secondary); font-size: 13px;">0%</span>
+    </div>
+</div>
+
+<!-- 任务结果 -->
+<div class="card" id="task-result-card" style="display: none;">
+    <div class="card-title">📊 任务结果</div>
+    <div id="task-result"></div>
+    
+    <!-- 日报生成区域 -->
+    <div id="report-actions" style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border);">
+        <div class="card-title">📈 舆情日报</div>
+        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+            <button class="btn btn-primary" onclick="generateAIBriefing()" id="gen-briefing-btn">
+                🤖 生成AI智能简报
+            </button>
+            <button class="btn btn-secondary" onclick="sendToFeishu()" id="send-feishu-btn">
+                📤 发送到飞书
+            </button>
+        </div>
+        <div id="briefing-container" style="display: none;">
+            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; white-space: pre-wrap; font-size: 14px; line-height: 1.8;">
+                <div id="briefing-content"></div>
+            </div>
+            <div style="margin-top: 12px;">
+                <button class="btn btn-secondary" onclick="copyBriefing()">📋 复制简报</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 历史任务 -->
+<div class="card">
+    <div class="card-title">📜 历史任务</div>
+    <div id="tasks-list">
+        <p style="color: var(--text-secondary);">暂无历史任务</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentTaskId = null;
+let pollInterval = null;
+
+function showAlert(message, type = 'success') {
+    const container = document.getElementById('alert-container');
+    container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+    setTimeout(() => container.innerHTML = '', 5000);
+}
+
+// 启动任务
+document.getElementById('start-task-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const platforms = Array.from(document.querySelectorAll('input[name="platforms"]:checked'))
+        .map(cb => cb.value);
+    
+    if (platforms.length === 0) {
+        showAlert('请至少选择一个平台', 'error');
+        return;
+    }
+    
+    const data = {
+        platforms: platforms,
+        filter_enabled: document.getElementById('filter_enabled').checked,
+        analyze_sentiment: document.getElementById('analyze_sentiment').checked,
+        save_to_feishu: document.getElementById('save_to_feishu').checked,
+        generate_briefing: document.getElementById('generate_briefing').checked,
+    };
+    
+    const startBtn = document.getElementById('start-btn');
+    startBtn.disabled = true;
+    startBtn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div> 启动中...';
+    
+    try {
+        const response = await fetch('/api/crawl/start', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        
+        const task = await response.json();
+        currentTaskId = task.task_id;
+        
+        document.getElementById('current-task-card').style.display = 'block';
+        document.getElementById('task-result-card').style.display = 'none';
+        
+        // 开始轮询任务状态
+        pollInterval = setInterval(pollTaskStatus, 2000);
+        
+    } catch (error) {
+        showAlert('启动失败: ' + error.message, 'error');
+        startBtn.disabled = false;
+        startBtn.innerHTML = '🚀 启动采集';
+    }
+});
+
+// 轮询任务状态
+async function pollTaskStatus() {
+    if (!currentTaskId) return;
+    
+    try {
+        const response = await fetch(`/api/crawl/status/${currentTaskId}`);
+        const task = await response.json();
+        
+        // 更新UI
+        document.getElementById('task-message').textContent = task.message;
+        document.getElementById('task-progress').style.width = task.progress + '%';
+        document.getElementById('task-progress-text').textContent = task.progress + '%';
+        
+        if (task.status === 'completed') {
+            clearInterval(pollInterval);
+            document.getElementById('task-status').textContent = '已完成';
+            document.getElementById('task-status').className = 'badge badge-success';
+            
+            // 显示结果
+            showTaskResult(task.result);
+            
+            // 恢复按钮
+            const startBtn = document.getElementById('start-btn');
+            startBtn.disabled = false;
+            startBtn.innerHTML = '🚀 启动采集';
+            
+            // 刷新历史任务
+            loadTasks();
+            
+        } else if (task.status === 'failed') {
+            clearInterval(pollInterval);
+            document.getElementById('task-status').textContent = '失败';
+            document.getElementById('task-status').className = 'badge badge-danger';
+            
+            showAlert('任务失败: ' + task.message, 'error');
+            
+            const startBtn = document.getElementById('start-btn');
+            startBtn.disabled = false;
+            startBtn.innerHTML = '🚀 启动采集';
+        }
+        
+    } catch (error) {
+        console.error('获取任务状态失败:', error);
+    }
+}
+
+// 显示任务结果
+function showTaskResult(result) {
+    if (!result) return;
+    
+    const container = document.getElementById('task-result');
+    document.getElementById('task-result-card').style.display = 'block';
+    
+    container.innerHTML = `
+        <div class="stats-grid" style="margin-bottom: 20px;">
+            <div class="stat-card">
+                <div class="stat-value">${result.total_articles}</div>
+                <div class="stat-label">采集文章总数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--success);">${result.sentiment_stats['积极'] || 0}</div>
+                <div class="stat-label">积极</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--danger);">${result.sentiment_stats['消极'] || 0}</div>
+                <div class="stat-label">消极</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">${result.sentiment_stats['中立'] || 0}</div>
+                <div class="stat-label">中立</div>
+            </div>
+        </div>
+        
+        ${result.feishu_result ? `
+            <div style="margin-bottom: 16px; padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                <strong>飞书存储:</strong> 
+                成功 ${result.feishu_result.success}, 
+                失败 ${result.feishu_result.failed}, 
+                跳过 ${result.feishu_result.skipped}
+            </div>
+        ` : ''}
+        
+        ${result.briefing ? `
+            <div style="margin-bottom: 16px;">
+                <strong>AI简报预览:</strong>
+                <div style="margin-top: 8px; padding: 12px; background: var(--bg-secondary); border-radius: 8px; white-space: pre-wrap; font-size: 13px;">
+                    ${result.briefing}
+                </div>
+            </div>
+        ` : ''}
+        
+        <div>
+            <strong>文章预览 (前10篇):</strong>
+            <table class="table" style="margin-top: 8px;">
+                <thead>
+                    <tr>
+                        <th>标题</th>
+                        <th>来源</th>
+                        <th>关键词</th>
+                        <th>情感</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${(result.articles_preview || []).slice(0, 10).map(a => `
+                        <tr>
+                            <td><a href="${a.url}" target="_blank" style="color: var(--accent);">${a.title.substring(0, 30)}...</a></td>
+                            <td>${a.author}</td>
+                            <td>${a.keyword}</td>
+                            <td><span class="badge ${a.sentiment === '积极' ? 'badge-success' : a.sentiment === '消极' ? 'badge-danger' : 'badge-warning'}">${a.sentiment || '未分析'}</span></td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+// 加载历史任务
+async function loadTasks() {
+    try {
+        const response = await fetch('/api/crawl/tasks');
+        const tasks = await response.json();
+        
+        const container = document.getElementById('tasks-list');
+        
+        if (tasks.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-secondary);">暂无历史任务</p>';
+            return;
+        }
+        
+        container.innerHTML = tasks.map(task => `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 8px;">
+                <div>
+                    <span class="badge ${task.status === 'completed' ? 'badge-success' : task.status === 'failed' ? 'badge-danger' : 'badge-warning'}">
+                        ${task.status === 'completed' ? '已完成' : task.status === 'failed' ? '失败' : '进行中'}
+                    </span>
+                    <span style="margin-left: 12px;">${task.task_id}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="color: var(--text-secondary); font-size: 13px;">
+                        ${task.result ? task.result.total_articles + ' 篇' : ''}
+                    </span>
+                    <span style="color: var(--text-secondary); font-size: 13px;">
+                        ${new Date(task.created_at).toLocaleString()}
+                    </span>
+                </div>
+            </div>
+        `).join('');
+        
+    } catch (error) {
+        console.error('加载任务列表失败:', error);
+    }
+}
+
+// 生成AI简报
+let currentBriefing = '';
+
+async function generateAIBriefing() {
+    const btn = document.getElementById('gen-briefing-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div> 生成中...';
+    
+    try {
+        const response = await fetch('/api/reports/briefing', {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            currentBriefing = data.briefing;
+            document.getElementById('briefing-content').textContent = data.briefing;
+            document.getElementById('briefing-container').style.display = 'block';
+            showAlert('AI简报生成成功！', 'success');
+        } else if (data.status === 'warning') {
+            showAlert(data.message, 'error');
+        } else {
+            showAlert('生成失败: ' + (data.detail || '未知错误'), 'error');
+        }
+        
+    } catch (error) {
+        showAlert('生成失败: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '🤖 生成AI智能简报';
+    }
+}
+
+async function sendToFeishu() {
+    const btn = document.getElementById('send-feishu-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div> 发送中...';
+    
+    try {
+        const response = await fetch('/api/reports/send', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ report_content: currentBriefing || null })
+        });
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            showAlert('报告已发送到飞书群！', 'success');
+        } else {
+            showAlert('发送失败: ' + (data.detail || data.message), 'error');
+        }
+        
+    } catch (error) {
+        showAlert('发送失败: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '📤 发送到飞书';
+    }
+}
+
+function copyBriefing() {
+    if (!currentBriefing) {
+        showAlert('没有可复制的简报', 'error');
+        return;
+    }
+    
+    navigator.clipboard.writeText(currentBriefing).then(() => {
+        showAlert('简报已复制到剪贴板', 'success');
+    }).catch(() => {
+        showAlert('复制失败', 'error');
+    });
+}
+
+// 页面加载
+document.addEventListener('DOMContentLoaded', loadTasks);
+</script>
+{% endblock %}
+
+
