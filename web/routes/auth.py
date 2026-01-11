@@ -5,6 +5,7 @@
 import asyncio
 import json
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
@@ -176,15 +177,29 @@ def wechat_mp_login_thread(session_id: str):
     """微信公众号平台登录线程"""
     global login_sessions
     
+    # #region agent log
+    import json;open('/Users/zayn/ALL_Projects/Monolith_detective/.cursor/debug.log','a').write(json.dumps({"location":"auth.py:175","message":"wechat_mp_login_thread entry","data":{"session_id":session_id},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"initial","hypothesisId":"E"})+"\n")
+    # #endregion
+    
     try:
         from crawlers import WechatMPCrawler
         login_sessions[session_id]["status"] = "waiting_scan"
         login_sessions[session_id]["message"] = "请使用微信扫描二维码"
         
+        cookie_file_path = str(get_cookie_file("wechat_mp"))
+        
+        # #region agent log
+        open('/Users/zayn/ALL_Projects/Monolith_detective/.cursor/debug.log','a').write(json.dumps({"location":"auth.py:186","message":"before WechatMPCrawler init","data":{"cookie_file":cookie_file_path},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"initial","hypothesisId":"A,D,E"})+"\n")
+        # #endregion
+        
         crawler = WechatMPCrawler(
             headless=False,
-            cookie_file=str(get_cookie_file("wechat_mp"))
+            cookie_file=cookie_file_path
         )
+        
+        # #region agent log
+        open('/Users/zayn/ALL_Projects/Monolith_detective/.cursor/debug.log','a').write(json.dumps({"location":"auth.py:192","message":"after WechatMPCrawler init","data":{"crawler_created":crawler is not None},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"initial","hypothesisId":"A,E"})+"\n")
+        # #endregion
         
         def qr_callback(qr_url: str):
             login_sessions[session_id]["qrcode_url"] = qr_url
@@ -199,6 +214,9 @@ def wechat_mp_login_thread(session_id: str):
             login_sessions[session_id]["message"] = "登录失败或超时"
             
     except Exception as e:
+        # #region agent log
+        open('/Users/zayn/ALL_Projects/Monolith_detective/.cursor/debug.log','a').write(json.dumps({"location":"auth.py:202","message":"wechat_mp_login_thread exception","data":{"error":str(e),"error_type":type(e).__name__},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"initial","hypothesisId":"A,B,E"})+"\n")
+        # #endregion
         logger.error(f"微信公众号平台登录失败: {e}")
         login_sessions[session_id]["status"] = "failed"
         login_sessions[session_id]["message"] = str(e)
@@ -284,3 +302,4 @@ async def get_all_platforms_status():
         })
     
     return result
+
