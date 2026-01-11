@@ -48,25 +48,6 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 
 访问 http://localhost:8000
 
-### Vercel 部署
-
-1. Fork 本项目到你的 GitHub
-
-2. 在 Vercel 中导入项目
-
-3. 配置环境变量：
-   - `FEISHU_APP_ID`: 飞书应用 ID
-   - `FEISHU_APP_SECRET`: 飞书应用密钥
-   - `FEISHU_APP_TOKEN`: 飞书多维表格 App Token
-   - `FEISHU_TABLE_ID`: 飞书数据表 ID
-   - `FEISHU_WEBHOOK_URL`: 飞书机器人 Webhook URL
-   - `LLM_PROVIDER`: LLM 提供商（默认：siliconflow）
-   - `LLM_MODEL`: LLM 模型（默认：deepseek-ai/DeepSeek-V3）
-   - `LLM_API_KEY`: LLM API 密钥
-   - `LLM_BASE_URL`: LLM API 地址
-
-4. 部署完成！
-
 ## 配置说明
 
 ### 飞书配置
@@ -127,47 +108,10 @@ relevance_keywords:
 └── main.py             # CLI 入口
 ```
 
-## 使用指南
-
-### Web 界面
-
-1. **首页**: 数据看板，查看采集统计和配置状态
-2. **采集与日报**: 启动采集任务，生成AI简报
-3. **数据概览**: 查看采集数据详情
-4. **平台管理**: 配置平台登录状态
-5. **系统配置**: 配置飞书和LLM
-
-### CLI 命令
-
-```bash
-# 执行采集
-python main.py
-
-# 仅采集特定平台
-python main.py --platform wechat
-
-# 生成日报
-python main.py --report
-
-# 生成AI简报
-python main.py --briefing
-```
-
-## 技术栈
-
-- **后端**: Python 3.10+, FastAPI, Uvicorn
-- **爬虫**: Requests, BeautifulSoup, Playwright
-- **数据处理**: SnowNLP (情感分析)
-- **LLM**: DeepSeek V3 (via SiliconFlow)
-- **存储**: 飞书多维表格
-- **前端**: HTML5, CSS3, JavaScript (原生)
 
 ## 注意事项
 
-1. 爬虫使用需遵守相关平台的服务条款
-2. 建议设置合理的请求间隔，避免被封禁
-3. 敏感配置请妥善保管，不要提交到 Git
-4. Playwright 需要安装浏览器：`playwright install chromium`
+Playwright 需要安装浏览器：`playwright install chromium`
 
 ## 许可证
 
