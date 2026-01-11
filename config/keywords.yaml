@@ -1,0 +1,34 @@
+keywords:
+- Monolith
+- Manus
+relevance_keywords:
+  MONOLITH:
+  - 砺思资本
+  - 砺思
+  - 曹曦
+  - 投资
+  - 基金
+  - 资本
+  - 融资
+  - 创业
+  - 实习
+  - VC
+  - PE
+  - 管理
+  Monolith:
+  - 砺思资本
+  - 砺思
+  - 曹曦
+  - 投资
+  - 基金
+  - 资本
+  - 融资
+  - 创业
+  - 实习
+  - VC
+  - PE
+  - 管理
+search:
+  max_pages: 1
+  request_delay: 3
+  sort_by_time: true
