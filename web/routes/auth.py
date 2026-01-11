@@ -21,7 +21,22 @@ sys.path.insert(0, str(PROJECT_ROOT))
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-DATA_DIR = PROJECT_ROOT / "data"
+def _runtime_data_dir() -> Path:
+    env_dir = os.environ.get("RUNTIME_DATA_DIR")
+    if env_dir:
+        p = Path(env_dir)
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+    default = PROJECT_ROOT / "data"
+    try:
+        default.mkdir(parents=True, exist_ok=True)
+        return default
+    except Exception:
+        tmp = Path("/tmp/monolith_data")
+        tmp.mkdir(parents=True, exist_ok=True)
+        return tmp
+
+DATA_DIR = _runtime_data_dir()
 
 # 登录状态存储
 login_sessions: Dict[str, Dict] = {}

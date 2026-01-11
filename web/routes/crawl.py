@@ -30,7 +30,21 @@ logger = logging.getLogger(__name__)
 
 # 配置路径
 CONFIG_DIR = PROJECT_ROOT / "config"
-DATA_DIR = PROJECT_ROOT / "data"
+def _runtime_data_dir() -> Path:
+    env_dir = os.environ.get("RUNTIME_DATA_DIR")
+    if env_dir:
+        p = Path(env_dir)
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+    default = PROJECT_ROOT / "data"
+    try:
+        default.mkdir(parents=True, exist_ok=True)
+        return default
+    except Exception:
+        tmp = Path("/tmp/monolith_data")
+        tmp.mkdir(parents=True, exist_ok=True)
+        return tmp
+DATA_DIR = _runtime_data_dir()
 
 # 任务状态存储
 tasks_status: Dict[str, Dict] = {}
