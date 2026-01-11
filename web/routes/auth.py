@@ -18,8 +18,6 @@ import sys
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from crawlers import XHSCrawler, WechatMPCrawler
-
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -73,6 +71,7 @@ def xhs_login_thread(session_id: str):
     global login_sessions
     
     try:
+        from crawlers import XHSCrawler
         login_sessions[session_id]["status"] = "waiting_scan"
         login_sessions[session_id]["message"] = "请使用小红书APP扫描二维码"
         
@@ -163,6 +162,7 @@ def wechat_mp_login_thread(session_id: str):
     global login_sessions
     
     try:
+        from crawlers import WechatMPCrawler
         login_sessions[session_id]["status"] = "waiting_scan"
         login_sessions[session_id]["message"] = "请使用微信扫描二维码"
         
@@ -269,6 +269,3 @@ async def get_all_platforms_status():
         })
     
     return result
-
-
-

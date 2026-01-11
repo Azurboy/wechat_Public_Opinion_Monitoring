@@ -20,7 +20,7 @@ import sys
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from crawlers import SogouWechatCrawler, XHSCrawler, WechatMPCrawler, Article
+from crawlers import SogouWechatCrawler, Article
 from processors import DedupProcessor, SentimentAnalyzer, RelevanceFilter, TimeFilter
 from storage.feishu_client import FeishuClient
 from reporters.daily_report import DailyReporter
@@ -123,6 +123,7 @@ def run_crawl_task(task_id: str, request: CrawlRequest):
             method = wechat_config.get("method", "sogou")
             
             if method == "mp":
+                from crawlers import WechatMPCrawler
                 crawler = WechatMPCrawler(
                     request_delay=delay,
                     data_dir=str(DATA_DIR)
@@ -141,6 +142,7 @@ def run_crawl_task(task_id: str, request: CrawlRequest):
             
             xhs_config = platforms_config.get("xiaohongshu", {})
             if xhs_config.get("enabled", True):
+                from crawlers import XHSCrawler
                 crawler = XHSCrawler(
                     request_delay=delay,
                     headless=True
@@ -388,5 +390,3 @@ async def get_latest_crawl():
         "crawled_at": _latest_crawl_result["crawled_at"],
         "task_id": _latest_crawl_result.get("task_id"),
     }
-
-
