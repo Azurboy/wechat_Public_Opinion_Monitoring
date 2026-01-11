@@ -6,10 +6,10 @@
 import argparse
 import logging
 import time
+import threading
 from datetime import datetime
 
 import schedule
-import yaml
 
 from crawlers import SogouWechatCrawler, Article
 from processors.dedup import DedupProcessor
@@ -17,13 +17,25 @@ from processors.sentiment import SentimentAnalyzer
 from storage.feishu_client import FeishuClient
 from reporters.daily_report import DailyReporter
 
+# 导入新的路径和配置管理
+try:
+    from path_manager import LOG_FILE, LOGS_DIR
+    from config_manager import get_config_manager
+    USE_NEW_CONFIG = True
+except ImportError:
+    USE_NEW_CONFIG = False
+    LOG_FILE = "scheduler.log"
+
 # 配置日志
+if USE_NEW_CONFIG:
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('scheduler.log', encoding='utf-8')
+        logging.FileHandler(LOG_FILE, encoding='utf-8')
     ]
 )
 logger = logging.getLogger(__name__)
@@ -31,8 +43,14 @@ logger = logging.getLogger(__name__)
 
 def load_config():
     """加载配置"""
-    with open("config/keywords.yaml", "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    if USE_NEW_CONFIG:
+        config_manager = get_config_manager()
+        return config_manager.get_config()
+    else:
+        # Fallback to YAML
+        import yaml
+        with open("config/keywords.yaml", "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
 
 
 def run_daily_task():
@@ -135,6 +153,24 @@ def main():
             time.sleep(60)  # 每分钟检查一次
     except KeyboardInterrupt:
         logger.info("调度器已停止")
+
+
+def main_with_time(schedule_time: str, stop_event: threading.Event):
+    """
+    从launcher调用的主函数
+    
+    Args:
+        schedule_time: 执行时间，例如"09:00"
+        stop_event: 停止事件
+    """
+    schedule.every().day.at(schedule_time).do(run_daily_task)
+    logger.info(f"定时任务已设置，每天 {schedule_time} 执行")
+    
+    while not stop_event.is_set():
+        schedule.run_pending()
+        time.sleep(60)  # 每分钟检查一次
+    
+    logger.info("调度器已停止")
 
 
 if __name__ == "__main__":

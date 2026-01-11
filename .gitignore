@@ -86,4 +86,23 @@ dmypy.json
 # Vercel
 .vercel
 
+# Packaging files (not needed in git)
+build.py
+build.spec
+requirements_build.txt
+path_manager.py
+config_manager.py
+gui_config.py
+launcher.py
+tray_app.py
+BUILD_STATUS.md
+PACKAGING_GUIDE.md
+PACKAGING_PROGRESS.md
+MACOS_TEST_REPORT.md
+ICON_README.md
+IMPLEMENTATION_SUMMARY.md
 
+# Documentation
+DEPLOYMENT_GUIDE.md
+SIMPLE_GUIDE.md
+README_GITHUB.md

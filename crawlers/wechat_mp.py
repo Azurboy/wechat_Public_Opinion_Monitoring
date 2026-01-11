@@ -16,6 +16,13 @@ from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext
 
 from .base import BaseCrawler, Article
 
+# 导入路径管理
+try:
+    from path_manager import WECHAT_MP_COOKIE
+except ImportError:
+    # 开发环境回退
+    WECHAT_MP_COOKIE = None
+
 logging.basicConfig(level=logging.INFO)
 
 
@@ -47,30 +54,22 @@ class WechatMPCrawler(BaseCrawler):
             request_delay: 请求间隔（秒）
             headless: 是否无头模式
             cookie_file: cookie文件路径
-            data_dir: 数据目录
+            data_dir: 数据目录（已弃用，使用path_manager）
         """
-        # #region agent log
-        import json;open('/Users/zayn/ALL_Projects/Monolith_detective/.cursor/debug.log','a').write(json.dumps({"location":"wechat_mp.py:36","message":"WechatMPCrawler.__init__ entry","data":{"request_delay":request_delay,"headless":headless,"cookie_file":cookie_file,"data_dir":data_dir},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"initial","hypothesisId":"A,D"})+"\n")
-        # #endregion
-        
         super().__init__(request_delay)
         self.headless = headless
         
-        # 数据目录
-        self.data_dir = Path(data_dir or "data")
-        
-        # #region agent log
-        try:
+        # 使用新的路径管理系统
+        if cookie_file:
+            self.cookie_file = cookie_file
+        elif WECHAT_MP_COOKIE:
+            self.cookie_file = str(WECHAT_MP_COOKIE)
+        else:
+            # 回退到旧的data_dir方式
+            self.data_dir = Path(data_dir or "data")
             self.data_dir.mkdir(parents=True, exist_ok=True)
-            mkdir_success = True
-            mkdir_error = None
-        except Exception as e:
-            mkdir_success = False
-            mkdir_error = str(e)
-        open('/Users/zayn/ALL_Projects/Monolith_detective/.cursor/debug.log','a').write(json.dumps({"location":"wechat_mp.py:57","message":"data_dir mkdir attempt","data":{"data_dir":str(self.data_dir),"mkdir_success":mkdir_success,"mkdir_error":mkdir_error},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"initial","hypothesisId":"A,D"})+"\n")
-        # #endregion
+            self.cookie_file = str(self.data_dir / "wechat_mp_cookies.json")
         
-        self.cookie_file = cookie_file or str(self.data_dir / "wechat_mp_cookies.json")
         self.browser: Optional[Browser] = None
         self.context: Optional[BrowserContext] = None
         self.page: Optional[Page] = None
@@ -84,20 +83,12 @@ class WechatMPCrawler(BaseCrawler):
     
     def _init_browser(self, headless: bool = None):
         """初始化浏览器"""
-        # #region agent log
-        import json;open('/Users/zayn/ALL_Projects/Monolith_detective/.cursor/debug.log','a').write(json.dumps({"location":"wechat_mp.py:71","message":"_init_browser entry","data":{"headless":headless,"browser_exists":self.browser is not None},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"initial","hypothesisId":"B"})+"\n")
-        # #endregion
-        
         if self.browser:
             return
         
         use_headless = headless if headless is not None else self.headless
         
         try:
-            # #region agent log
-            open('/Users/zayn/ALL_Projects/Monolith_detective/.cursor/debug.log','a').write(json.dumps({"location":"wechat_mp.py:78","message":"before playwright start","data":{"use_headless":use_headless},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"initial","hypothesisId":"B"})+"\n")
-            # #endregion
-            
             self._playwright = sync_playwright().start()
             self.browser = self._playwright.chromium.launch(
                 headless=use_headless,
@@ -106,10 +97,6 @@ class WechatMPCrawler(BaseCrawler):
                     '--no-sandbox',
                 ]
             )
-            
-            # #region agent log
-            open('/Users/zayn/ALL_Projects/Monolith_detective/.cursor/debug.log','a').write(json.dumps({"location":"wechat_mp.py:86","message":"after browser launch","data":{"browser_launched":self.browser is not None},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"initial","hypothesisId":"B"})+"\n")
-            # #endregion
             
             self.context = self.browser.new_context(
                 user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -121,22 +108,11 @@ class WechatMPCrawler(BaseCrawler):
             self._load_cookies()
             
             self.page = self.context.new_page()
-            
-            # #region agent log
-            open('/Users/zayn/ALL_Projects/Monolith_detective/.cursor/debug.log','a').write(json.dumps({"location":"wechat_mp.py:96","message":"_init_browser success","data":{"page_created":self.page is not None},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"initial","hypothesisId":"B,C"})+"\n")
-            # #endregion
         except Exception as e:
-            # #region agent log
-            open('/Users/zayn/ALL_Projects/Monolith_detective/.cursor/debug.log','a').write(json.dumps({"location":"wechat_mp.py:96","message":"_init_browser failed","data":{"error":str(e),"error_type":type(e).__name__,"page_attr_exists":hasattr(self,"page")},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"initial","hypothesisId":"B,C"})+"\n")
-            # #endregion
             raise
     
     def _close_browser(self):
         """关闭浏览器"""
-        # #region agent log
-        import json;open('/Users/zayn/ALL_Projects/Monolith_detective/.cursor/debug.log','a').write(json.dumps({"location":"wechat_mp.py:98","message":"_close_browser entry","data":{"has_page":hasattr(self,"page"),"page_exists":hasattr(self,"page") and self.page is not None},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"initial","hypothesisId":"C"})+"\n")
-        # #endregion
-        
         if hasattr(self, 'page') and self.page:
             self.page.close()
             self.page = None
@@ -208,22 +184,11 @@ class WechatMPCrawler(BaseCrawler):
         Returns:
             是否登录成功
         """
-        # #region agent log
-        import json;open('/Users/zayn/ALL_Projects/Monolith_detective/.cursor/debug.log','a').write(json.dumps({"location":"wechat_mp.py:200","message":"login_by_qrcode entry","data":{"callback_exists":callback is not None,"timeout":timeout},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"initial","hypothesisId":"B,E"})+"\n")
-        # #endregion
-        
         self._close_browser()
         
         try:
             self._init_browser(headless=False)
-            
-            # #region agent log
-            open('/Users/zayn/ALL_Projects/Monolith_detective/.cursor/debug.log','a').write(json.dumps({"location":"wechat_mp.py:212","message":"after _init_browser","data":{"browser_exists":self.browser is not None,"page_exists":self.page is not None if hasattr(self,"page") else False},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"initial","hypothesisId":"B,C"})+"\n")
-            # #endregion
         except Exception as e:
-            # #region agent log
-            open('/Users/zayn/ALL_Projects/Monolith_detective/.cursor/debug.log','a').write(json.dumps({"location":"wechat_mp.py:212","message":"_init_browser failed in login","data":{"error":str(e),"error_type":type(e).__name__},"timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"initial","hypothesisId":"B,E"})+"\n")
-            # #endregion
             self.logger.error(f"微信公众号平台登录失败: {e}")
             return False
         

@@ -7,9 +7,13 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Dict, Set, Optional
 
-import yaml
-
 from crawlers.base import Article
+
+# 导入配置管理
+try:
+    from config_manager import get_config_manager
+except ImportError:
+    get_config_manager = None
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,36 +43,26 @@ class RelevanceFilter:
         初始化过滤器
         
         Args:
-            config_path: 配置文件路径，默认为项目根目录下的 config/keywords.yaml
+            config_path: 配置文件路径（已弃用，使用config_manager）
         """
         self.logger = logging.getLogger(self.__class__.__name__)
         
-        # 如果未指定路径，自动查找项目根目录
-        if config_path is None:
-            from pathlib import Path
-            # 尝试找到项目根目录
-            current_file = Path(__file__).resolve()
-            project_root = current_file.parent.parent
-            config_path = str(project_root / "config" / "keywords.yaml")
+        # 使用配置管理器加载规则
+        if get_config_manager:
+            try:
+                config_manager = get_config_manager()
+                self.relevance_rules = config_manager.get_relevance_keywords()
+                self.logger.info(f"从配置管理器加载了 {len(self.relevance_rules)} 条过滤规则")
+            except Exception as e:
+                self.logger.warning(f"加载配置失败: {e}，使用默认规则")
+                self.relevance_rules = self.DEFAULT_RELEVANCE_RULES.copy()
+        else:
+            self.relevance_rules = self.DEFAULT_RELEVANCE_RULES.copy()
         
-        self.relevance_rules = self._load_rules(config_path)
         self.whitelist_keywords = self.WHITELIST_KEYWORDS.copy()
     
     def _load_rules(self, config_path: str) -> Dict[str, List[str]]:
-        """从配置文件加载过滤规则"""
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f) or {}
-            
-            rules = config.get("relevance_keywords", {})
-            if rules:
-                self.logger.info(f"从配置文件加载了 {len(rules)} 条过滤规则")
-                return rules
-        except FileNotFoundError:
-            self.logger.warning(f"配置文件不存在: {config_path}，使用默认规则")
-        except Exception as e:
-            self.logger.warning(f"加载配置文件失败 ({config_path}): {e}，使用默认规则")
-        
+        """已弃用：从配置文件加载过滤规则（保留用于兼容性）"""
         return self.DEFAULT_RELEVANCE_RULES.copy()
     
     def is_relevant(self, article: Article) -> bool:
@@ -209,14 +203,23 @@ if __name__ == "__main__":
 class TimeFilter:
     """时间过滤器，只保留最近N小时内发布的文章"""
     
-    def __init__(self, hours: int = 48):
+    def __init__(self, hours: int = None):
         """
         初始化时间过滤器
         
         Args:
-            hours: 保留多少小时内的文章，默认48小时
+            hours: 保留多少小时内的文章，默认从配置读取，fallback为48小时
         """
-        self.hours = hours
+        # 从配置管理器读取时间过滤设置
+        if hours is None and get_config_manager:
+            try:
+                config_manager = get_config_manager()
+                time_filter_config = config_manager.get_time_filter_config()
+                hours = time_filter_config.get('hours', 48)
+            except:
+                hours = 48
+        
+        self.hours = hours or 48
         self.logger = logging.getLogger(self.__class__.__name__)
     
     def filter_recent(self, articles: List[Article], hours: Optional[int] = None) -> List[Article]:

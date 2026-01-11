@@ -7,9 +7,14 @@ from pathlib import Path
 from typing import List, Optional
 
 import requests
-import yaml
 
 from crawlers.base import Article
+
+# 导入配置管理
+try:
+    from config_manager import get_config_manager
+except ImportError:
+    get_config_manager = None
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,37 +28,35 @@ class LLMClient:
         初始化LLM客户端
         
         Args:
-            config_path: 配置文件路径，默认为项目根目录下的 config/feishu.yaml
+            config_path: 配置文件路径（已弃用，使用config_manager）
         """
         self.logger = logging.getLogger(self.__class__.__name__)
         
-        # 如果未指定路径，自动查找项目根目录
-        if config_path is None:
-            from pathlib import Path
-            current_file = Path(__file__).resolve()
-            project_root = current_file.parent.parent
-            config_path = str(project_root / "config" / "feishu.yaml")
-        
-        self.config = self._load_config(config_path)
-        
-        llm_config = self.config.get("llm", {})
-        self.api_key = llm_config.get("api_key", "")
-        self.base_url = llm_config.get("base_url", "https://api.siliconflow.cn/v1")
-        self.model = llm_config.get("model", "deepseek-ai/DeepSeek-V3")
+        # 使用配置管理器加载配置
+        if get_config_manager:
+            try:
+                config_manager = get_config_manager()
+                llm_config = config_manager.get_llm_config()
+                
+                self.api_key = llm_config.get("api_key", "")
+                self.base_url = llm_config.get("base_url", "https://api.siliconflow.cn/v1")
+                self.model = llm_config.get("model", "deepseek-ai/DeepSeek-V3")
+            except Exception as e:
+                self.logger.warning(f"从配置管理器加载失败: {e}")
+                self.api_key = ""
+                self.base_url = "https://api.siliconflow.cn/v1"
+                self.model = "deepseek-ai/DeepSeek-V3"
+        else:
+            # Fallback：没有config_manager
+            self.api_key = ""
+            self.base_url = "https://api.siliconflow.cn/v1"
+            self.model = "deepseek-ai/DeepSeek-V3"
         
         self._validate_config()
     
     def _load_config(self, config_path: str) -> dict:
-        """加载配置文件"""
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                return yaml.safe_load(f) or {}
-        except FileNotFoundError:
-            self.logger.warning(f"配置文件不存在: {config_path}")
-            return {}
-        except Exception as e:
-            self.logger.warning(f"加载配置文件失败 ({config_path}): {e}")
-            return {}
+        """已弃用：加载配置文件（保留用于兼容性）"""
+        return {}
     
     def _validate_config(self):
         """验证配置"""

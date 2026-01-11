@@ -6,13 +6,26 @@ import hashlib
 from typing import List, Set
 from crawlers.base import Article
 
+# 导入路径管理（缓存文件在未来可能需要持久化）
+try:
+    from path_manager import DEDUP_CACHE_FILE
+except ImportError:
+    DEDUP_CACHE_FILE = None
+
 
 class DedupProcessor:
     """去重处理器"""
     
-    def __init__(self):
+    def __init__(self, cache_file: str = None):
+        """
+        初始化去重处理器
+        
+        Args:
+            cache_file: 缓存文件路径（未来功能）
+        """
         self.seen_urls: Set[str] = set()
         self.seen_hashes: Set[str] = set()
+        self.cache_file = cache_file or (str(DEDUP_CACHE_FILE) if DEDUP_CACHE_FILE else None)
     
     def _get_content_hash(self, article: Article) -> str:
         """基于内容生成哈希"""

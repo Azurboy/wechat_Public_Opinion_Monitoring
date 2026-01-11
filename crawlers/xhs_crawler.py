@@ -16,6 +16,13 @@ from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext
 
 from .base import BaseCrawler, Article
 
+# 导入路径管理
+try:
+    from path_manager import XHS_COOKIE
+except ImportError:
+    # 开发环境回退
+    XHS_COOKIE = None
+
 logging.basicConfig(level=logging.INFO)
 
 
@@ -44,16 +51,22 @@ class XHSCrawler(BaseCrawler):
             request_delay: 请求间隔（秒）
             headless: 是否无头模式运行浏览器
             cookie_file: cookie文件路径
-            data_dir: 数据目录（存储cookies等）
+            data_dir: 数据目录（已弃用，使用path_manager）
         """
         super().__init__(request_delay)
         self.headless = headless
         
-        # 数据目录
-        self.data_dir = Path(data_dir or "data")
-        self.data_dir.mkdir(parents=True, exist_ok=True)
+        # 使用新的路径管理系统
+        if cookie_file:
+            self.cookie_file = cookie_file
+        elif XHS_COOKIE:
+            self.cookie_file = str(XHS_COOKIE)
+        else:
+            # 回退到旧的data_dir方式
+            self.data_dir = Path(data_dir or "data")
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+            self.cookie_file = str(self.data_dir / "xhs_cookies.json")
         
-        self.cookie_file = cookie_file or str(self.data_dir / "xhs_cookies.json")
         self.browser: Optional[Browser] = None
         self.context: Optional[BrowserContext] = None
         self.page: Optional[Page] = None
